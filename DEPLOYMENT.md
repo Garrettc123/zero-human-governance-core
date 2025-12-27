@@ -31,7 +31,7 @@ For local testing and development:
 
 ```bash
 # Install dependencies
-pip install fastapi uvicorn pydantic requests
+pip install -r requirements.txt
 
 # Start governance core
 cd governance
@@ -121,7 +121,7 @@ Monitor deployments through:
 
 ```bash
 # Reinstall dependencies
-pip install --upgrade fastapi uvicorn pydantic requests
+pip install --upgrade -r requirements.txt
 ```
 
 ## Production Deployment (Future)
