@@ -1,5 +1,7 @@
 # 🚀 Zero-Human Governance Core
 
+![Deployment Status](https://github.com/Garrettc123/zero-human-governance-core/actions/workflows/deploy-governance.yml/badge.svg)
+
 **Enterprise-Grade AI Governance with Cryptographic Decision Tracking**
 
 ## What This System Does
@@ -124,16 +126,40 @@ OpenAI, Anthropic, and Perplexity need this infrastructure to sell to Fortune 50
 
 ## Deployment
 
-**GitHub Actions** (Recommended)
-- Automatic deployment on every push
-- Scheduled runs every 6 hours
-- Zero infrastructure cost
+### GitHub Actions (Automated - Deployed Now! ✅)
 
-**Docker** (Production)
+The system is **currently deployed** and automatically redeploys:
+- On every push to `main` branch
+- Every 6 hours on schedule
+- Via manual workflow dispatch
+
+**View Deployment Status:** [Actions Tab](https://github.com/Garrettc123/zero-human-governance-core/actions/workflows/deploy-governance.yml)
+
+**Manual Deployment:**
+```bash
+# Trigger deployment via GitHub Actions
+# Go to: Actions > Deploy Governance System > Run workflow
+```
+
+### Local Development
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Start governance core
+cd governance
+python main.py
+
+# Access at http://localhost:8001
+```
+
+### Docker (Production)
 ```bash
 docker build -t zero-human-governance .
 docker run -p 8001:8001 zero-human-governance
 ```
+
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Roadmap
 
@@ -154,5 +180,6 @@ GitHub: [@Garrettc123](https://github.com/Garrettc123)
 
 ---
 
-**Status**: 🟢 Production Ready  
-**Last Updated**: December 25, 2025
+**Status**: 🟢 Deployed and Operational  
+**Last Updated**: December 27, 2025  
+**Deployment**: Active on GitHub Actions

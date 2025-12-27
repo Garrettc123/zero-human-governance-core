@@ -1,0 +1,15 @@
+{
+  "deployment_id": "deploy-20251227-190327",
+  "timestamp": "2025-12-27T19:03:27Z",
+  "trigger": "manual_deployment_request",
+  "status": "pending",
+  "environment": "github_actions",
+  "version": "1.0.0",
+  "components": {
+    "governance_core": {
+      "port": 8001,
+      "status": "ready"
+    }
+  },
+  "notes": "Deployment triggered via 'deploy now' request"
+}
