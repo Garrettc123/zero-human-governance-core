@@ -1,0 +1,16 @@
+name: Nightly Key Rotation
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Run at 2 AM UTC every day
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Rotation
+        run: |
+          curl -X POST "${{ secrets.AUTOMATON_URL }}/api/rotation/run" \
+            -H "X-Admin-API-Key: ${{ secrets.AUTOMATON_ADMIN_KEY }}" \
+            -H "Content-Type: application/json"
