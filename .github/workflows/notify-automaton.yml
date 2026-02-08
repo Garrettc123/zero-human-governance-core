@@ -1,0 +1,23 @@
+name: Notify API Key Automaton
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - production
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Automaton
+        run: |
+          curl -X POST "${{ secrets.AUTOMATON_URL }}/api/system-requests" \
+            -H "X-Admin-API-Key: ${{ secrets.AUTOMATON_ADMIN_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "repo": "${{ github.repository }}",
+              "commit_sha": "${{ github.sha }}",
+              "branch": "${{ github.ref_name }}"
+            }'
