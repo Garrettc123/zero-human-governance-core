@@ -6,15 +6,27 @@ on:
       - main
       - staging
       - production
+  workflow_dispatch:
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Notify Automaton
+      - name: Check secrets
+        env:
+          AUTOMATON_URL: ${{ secrets.AUTOMATON_URL }}
+          AUTOMATON_ADMIN_KEY: ${{ secrets.AUTOMATON_ADMIN_KEY }}
         run: |
-          curl -X POST "${{ secrets.AUTOMATON_URL }}/api/system-requests" \
-            -H "X-Admin-API-Key: ${{ secrets.AUTOMATON_ADMIN_KEY }}" \
+          if [ -z "$AUTOMATON_URL" ]; then echo "⚠️ AUTOMATON_URL not configured — skipping"; exit 0; fi
+          if [ -z "$AUTOMATON_ADMIN_KEY" ]; then echo "⚠️ AUTOMATON_ADMIN_KEY not configured — skipping"; exit 0; fi
+
+      - name: Notify Automaton
+        env:
+          AUTOMATON_URL: ${{ secrets.AUTOMATON_URL }}
+          AUTOMATON_ADMIN_KEY: ${{ secrets.AUTOMATON_ADMIN_KEY }}
+        run: |
+          curl -X POST "$AUTOMATON_URL/api/system-requests" \
+            -H "X-Admin-API-Key: $AUTOMATON_ADMIN_KEY" \
             -H "Content-Type: application/json" \
             -d '{
               "repo": "${{ github.repository }}",
