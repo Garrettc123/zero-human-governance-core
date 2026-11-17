@@ -401,16 +401,16 @@ async def _cast_vote(client, agent, proposal_id, vote, reason=""):
 
 @pytest.mark.anyio
 class TestVoting:
-    async def test_vote_approved_and_executed(self, client: AsyncClient, two_agents):
+    async def test_vote_approved_without_execution(self, client: AsyncClient, two_agents):
         proposer, voter = two_agents
-        # With 2 active agents (1 eligible voter), 1 yes-vote ≥ 50% threshold → execute
+        # With 2 active agents, one eligible yes-vote approves but does not execute.
         proposal_id = await _submit_proposal(client, proposer, risk_level="low")
         resp = await _cast_vote(client, voter, proposal_id, vote=True)
         assert resp.status_code == 200
         body = resp.json()
-        assert body["execution_triggered"] is True
-        assert body["proposal_status"] == "executed"
-        assert len(executed_actions) == 1
+        assert body["execution_triggered"] is False
+        assert body["proposal_status"] == "approved"
+        assert len(executed_actions) == 0
 
     async def test_vote_rejected_when_threshold_unreachable(self, client: AsyncClient, two_agents):
         proposer, voter = two_agents
@@ -441,9 +441,9 @@ class TestVoting:
     async def test_vote_on_closed_proposal_fails(self, client: AsyncClient, two_agents):
         proposer, voter = two_agents
         proposal_id = await _submit_proposal(client, proposer, risk_level="low")
-        # Execute proposal
+        # Approve proposal
         await _cast_vote(client, voter, proposal_id, vote=True)
-        # Try to vote again on an already-executed proposal
+        # Try to vote again on an already-approved proposal
         resp = await _cast_vote(client, voter, proposal_id, vote=True)
         assert resp.status_code == 400
 
@@ -502,10 +502,10 @@ class TestMultiSig:
         r1 = await _cast_vote(client, agents[1], proposal_id, vote=True)
         assert r1.json()["execution_triggered"] is False
 
-        # 2 yes-votes from 2 eligible -> 100% >= 67% AND count>=2 -> execute
+        # Two eligible yes-votes meet the approval threshold without dispatch.
         r2 = await _cast_vote(client, agents[2], proposal_id, vote=True)
-        assert r2.json()["execution_triggered"] is True
-        assert r2.json()["proposal_status"] == "executed"
+        assert r2.json()["execution_triggered"] is False
+        assert r2.json()["proposal_status"] == "approved"
 
     async def test_critical_risk_requires_three_votes(self, client: AsyncClient):
         """critical-risk needs MIN_VOTES_REQUIRED=3 and ≥80% threshold."""
@@ -533,9 +533,9 @@ class TestMultiSig:
         r3 = await _cast_vote(client, agents[3], proposal_id, vote=True)
         assert r3.json()["execution_triggered"] is False
 
-        # 4 yes from 4 eligible = 100% ≥ 80% AND ≥ 3 votes → execute
+        # Four eligible yes-votes approve, but do not dispatch.
         r4 = await _cast_vote(client, agents[4], proposal_id, vote=True)
-        assert r4.json()["execution_triggered"] is True
+        assert r4.json()["execution_triggered"] is False
 
     async def test_min_votes_threshold_constants(self):
         assert MIN_VOTES_REQUIRED["high"] == 2
@@ -723,14 +723,16 @@ class TestExecutions:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    async def test_executed_proposal_appears_in_executions(self, client: AsyncClient, two_agents):
+    async def test_approved_proposal_does_not_appear_in_executions(self, client: AsyncClient, two_agents):
         proposer, voter = two_agents
         proposal_id = await _submit_proposal(client, proposer, risk_level="low")
         await _cast_vote(client, voter, proposal_id, vote=True)
         resp = await client.get("/executions")
         assert resp.status_code == 200
-        assert len(resp.json()) == 1
-        assert resp.json()[0]["proposal_id"] == proposal_id
+        assert resp.json() == []
+        approved = await client.get(f"/proposals/{proposal_id}")
+        assert approved.json()["status"] == "approved"
+        assert approved.json()["executed_at"] is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -763,7 +765,8 @@ class TestMetrics:
         assert body["agents"]["total"] == 2
         assert body["agents"]["active"] == 2
         assert body["proposals"]["total"] == 1
-        assert body["proposals"]["executed"] == 1
+        assert body["proposals"]["approved"] == 1
+        assert body["proposals"]["executed"] == 0
 
     async def test_dashboard_html_response(self, client: AsyncClient):
         resp = await client.get("/dashboard")

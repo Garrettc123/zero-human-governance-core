@@ -118,7 +118,7 @@ class AgentInfo(BaseModel):
 class ProposalRequest(BaseModel):
     title: str
     description: str
-    proposed_action: str = Field(..., description="Action executed if the proposal passes")
+    proposed_action: str = Field(..., description="Action proposed for separate approved dispatch; voting alone never executes it")
     risk_level: str = Field(default="medium", description="low | medium | high | critical")
     action_params: Dict[str, Any] = Field(default_factory=dict)
     agent_id: str = Field(..., description="ID of the submitting agent")
@@ -289,9 +289,10 @@ def _get_eligible_voters(proposal_id: str) -> List[Dict]:
 
 
 def try_execute_proposal(proposal_id: str) -> bool:
-    """Check voting thresholds and execute or reject the proposal if decided.
+    """Check voting thresholds and approve or reject a proposal.
 
-    Returns True if the proposal was executed.
+    Voting grants approval only: it never dispatches external actions and
+    must not create an execution receipt. Return False (no execution).
     """
     proposal = proposals_db[proposal_id]
     if proposal["status"] != "pending":
@@ -312,28 +313,24 @@ def try_execute_proposal(proposal_id: str) -> bool:
     # Approval: enough yes-votes and fraction of eligible voters satisfied.
     # total_eligible > 0 is guaranteed by the early-return guard above.
     if votes_for >= min_votes and votes_for / total_eligible >= threshold:
-        execution_record = {
-            "execution_id": str(uuid.uuid4()),
-            "proposal_id": proposal_id,
-            "proposal_title": proposal["title"],
-            "proposed_action": proposal["proposed_action"],
-            "action_params": proposal["action_params"],
-            "risk_level": proposal["risk_level"],
-            "executed_at": utcnow(),
-            "votes_for": votes_for,
-            "votes_against": votes_against,
-            "total_eligible": total_eligible,
-        }
-        executed_actions.append(execution_record)
-        proposal["status"] = "executed"
-        proposal["executed_at"] = execution_record["executed_at"]
+        # Agent votes are not an execution mechanism. Keep the proposed
+        # action pending for a separately authorized, receipt-bearing runner.
+        proposal["status"] = "approved"
         append_audit_entry(
             agent_id="governance_system",
-            action="proposal_executed",
+            action="proposal_approved",
             resource=f"proposal:{proposal_id}",
-            details=execution_record,
+            details={
+                "proposal_id": proposal_id,
+                "proposed_action": proposal["proposed_action"],
+                "risk_level": proposal["risk_level"],
+                "votes_for": votes_for,
+                "votes_against": votes_against,
+                "total_eligible": total_eligible,
+                "external_execution_verified": False,
+            },
         )
-        return True
+        return False
 
     # Early rejection: remaining possible votes cannot reach threshold
     remaining = total_eligible - total_votes
@@ -562,8 +559,8 @@ async def vote_on_proposal(proposal_id: str, request: VoteRequest):
     Rules:
     * The proposer may not vote on their own proposal.
     * Each agent may vote at most once.
-    * The proposal is automatically executed (or rejected) once a voting
-      threshold is reached.
+    * The proposal is approved (or rejected) once a voting threshold
+      is reached. Approval does not execute the proposed external action.
     """
     if proposal_id not in proposals_db:
         raise HTTPException(
