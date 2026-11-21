@@ -59,8 +59,9 @@ def sign_vote(private_key: str, agent_id: str, proposal_id: str, vote: bool, rea
 
 
 @pytest.fixture(autouse=True)
-def clear_state():
-    """Reset all in-memory stores before each test."""
+def clear_state(monkeypatch):
+    """Reset stores and provision a test-only operator credential."""
+    monkeypatch.setenv("GOVERNANCE_ADMIN_TOKEN", "test-only-" + "x" * 32)
     agents_db.clear()
     proposals_db.clear()
     votes_db.clear()
@@ -78,7 +79,11 @@ def anyio_backend():
 async def client():
     """Async HTTP client bound to the FastAPI app."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-Garcar-Admin-Token": "test-only-" + "x" * 32},
+    ) as ac:
         yield ac
 
 

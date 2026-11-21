@@ -10,12 +10,14 @@ Implements:
   • Governance dashboard (HTML + JSON)
 """
 
+import hmac
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -197,6 +199,20 @@ class PolicyCheckResponse(BaseModel):
 
 
 # ── Helper Functions ──────────────────────────────────────────────────────────
+
+
+def require_admin_token(provided: Optional[str]) -> None:
+    """Fail closed for operator-controlled agent lifecycle mutations.
+
+    Provision GOVERNANCE_ADMIN_TOKEN using the deployment secret manager.
+    The token must be at least 32 characters; missing configuration does not
+    enable a development-mode bypass.
+    """
+    configured = os.environ.get("GOVERNANCE_ADMIN_TOKEN", "")
+    if len(configured) < 32:
+        raise HTTPException(status_code=503, detail="Administrator authentication is not configured")
+    if not provided or not hmac.compare_digest(provided, configured):
+        raise HTTPException(status_code=403, detail="Administrator authorization required")
 
 
 def utcnow() -> str:
@@ -388,12 +404,17 @@ async def health():
 
 
 @app.post("/agents/register", response_model=AgentRegistrationResponse, tags=["Agents"])
-async def register_agent(request: AgentRegistrationRequest):
+async def register_agent(
+    request: AgentRegistrationRequest,
+    admin_token: Optional[str] = Header(default=None, alias="X-Garcar-Admin-Token"),
+):
     """Register a new AI agent and issue an Ed25519 keypair.
 
     The **private key** is returned exactly once in this response and is
-    *never* stored server-side.  The caller must persist it securely.
+    *never* stored server-side. Only an authorized operator may provision an
+    agent or assign capabilities and permissions.
     """
+    require_admin_token(admin_token)
     private_key, public_key = generate_keypair()
     agent_id = str(uuid.uuid4())
     now = utcnow()
@@ -432,8 +453,13 @@ async def get_agent(agent_id: str):
 
 
 @app.put("/agents/{agent_id}/status", tags=["Agents"])
-async def update_agent_status(agent_id: str, status: str):
-    """Update an agent's status (active | suspended | inactive)."""
+async def update_agent_status(
+    agent_id: str,
+    status: str,
+    admin_token: Optional[str] = Header(default=None, alias="X-Garcar-Admin-Token"),
+):
+    """Operator-only agent status mutation (active | suspended | inactive)."""
+    require_admin_token(admin_token)
     if agent_id not in agents_db:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
     if status not in ("active", "suspended", "inactive"):
